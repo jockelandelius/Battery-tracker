@@ -21,7 +21,7 @@
     <label>Spänning (V)<input name="voltage" type="text" inputmode="decimal" value="{{ request.form.voltage or '' }}" placeholder="1,2" required {% if not battery_type %}disabled{% endif %}></label>
     <label>Tillverkningsland<input name="country" value="{{ request.form.country or '' }}" placeholder="Japan" {% if not battery_type %}disabled{% endif %}></label>
     <label>Introduktionsmånad<input name="introduced_month" type="month" value="{{ request.form.introduced_month or '' }}" required {% if not battery_type %}disabled{% endif %}></label>
-    <label>mAh (märkning)<input name="nominal_capacity_mah" type="text" inputmode="decimal" value="{{ request.form.nominal_capacity_mah or '' }}" placeholder="750" required {% if not battery_type %}disabled{% endif %}></label>
+    <label>mAh (märkning)<input name="nominal_capacity_mah" type="text" inputmode="numeric" pattern="\d+" value="{{ request.form.nominal_capacity_mah or '' }}" placeholder="750" required {% if not battery_type %}disabled{% endif %}></label>
     <label>Status<select name="status" {% if not battery_type %}disabled{% endif %}>{% for status in ['Aktiv', 'Väntande', 'Ej aktivt'] %}<option {% if (request.form.status or 'Aktiv') == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></label>
   </div>
   {% if fields %}

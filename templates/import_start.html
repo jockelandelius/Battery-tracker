@@ -8,7 +8,7 @@
     <label>Importtyp<select name="import_kind"><option value="batteries">Batterier</option><option value="charges">Laddningshistorik</option></select><small>Importera batterier före eventuell laddningshistorik.</small></label>
     <label>Batterityp för batteriimport<select name="type_id"><option value="">Välj batterityp</option>{% for type in battery_types %}<option value="{{ type.id }}">{{ type.code }} · {{ type.name }}</option>{% endfor %}</select><small>Ignoreras vid import av laddningshistorik.</small></label>
   </div>
-  <label>CSV-data<textarea name="csv_text" rows="14" placeholder="ID;Märke;Kemi;V(olt);Tillverkningsland;Introduktionsmånad;mAh (märkning);Status&#10;AAA-065;IKEA LADDA;NiMH;1,2;Japan;?;750;Aktiv" required></textarea><small>Semikolon rekommenderas för svenska decimaler. Första raden ska innehålla rubriker. Använd <code>?</code> för okända valfria uppgifter.</small></label>
+  <label>CSV-data<textarea name="csv_text" rows="14" placeholder="ID;Märke;Kemi;V(olt);Tillverkningsland;Introduktionsmånad;mAh (märkning);Status&#10;AAA-065;IKEA LADDA;NiMH;1,2;Japan;?;750;Aktiv" required></textarea><small>Semikolon rekommenderas för svenska decimaler. Första raden ska normalt innehålla rubriker. Laddningshistorik får också klistras in utan rubriker i ordningen datum, batteri-ID, mAh, laddningsläge, ström och kommentar. Tom ström är tillåten. Använd <code>?</code> för okända valfria uppgifter.</small></label>
   <div class="form-actions"><a href="{{ url_for('index') }}">Avbryt</a><button class="button primary" type="submit">Fortsätt till mappning</button></div>
 </form>
 {% endblock %}

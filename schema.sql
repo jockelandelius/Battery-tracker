@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS charges (
     charged_on TEXT NOT NULL,
     capacity_mah REAL NOT NULL CHECK(capacity_mah >= 0),
     mode TEXT NOT NULL CHECK(mode IN ('Activate', 'Charge', 'Analysis')),
-    current_a REAL NOT NULL CHECK(current_a >= 0.1 AND current_a <= 2.0),
+    current_a REAL CHECK(current_a IS NULL OR (current_a >= 0.1 AND current_a <= 2.0)),
     comment TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

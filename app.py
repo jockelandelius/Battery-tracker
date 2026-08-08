@@ -115,7 +115,7 @@ def create_app():
             return render_template("import_start.html", battery_types=battery_types)
 
         try:
-            headers, rows = parse_csv_text(csv_text)
+            headers, rows, headerless = parse_csv_text(csv_text, import_kind)
         except ValueError as error:
             flash(str(error), "error")
             return render_template("import_start.html", battery_types=battery_types)
@@ -130,21 +130,26 @@ def create_app():
             )
 
         mapping = {index: request.form.get(f"mapping_{index}", "ignore") for index in range(len(headers))}
-        import_rows, errors = build_import_rows(database, import_kind, battery_type, headers, rows, mapping)
+        import_rows, errors, warnings = build_import_rows(
+            database, import_kind, battery_type, headers, rows, mapping,
+            row_number_start=1 if headerless else 2,
+        )
         if action == "preview":
             return render_template(
                 "import_preview.html", battery_types=battery_types, battery_type=battery_type,
                 import_kind=import_kind, csv_text=csv_text, headers=headers, mapping=mapping,
-                import_rows=import_rows, errors=errors,
+                import_rows=import_rows, errors=errors, warnings=warnings,
             )
         if action == "commit":
-            if errors:
+            confirmation_required = warnings and request.form.get("accept_skipped") != "yes"
+            if errors or confirmation_required:
                 for error in errors:
                     flash(error, "error")
                 return render_template(
                     "import_preview.html", battery_types=battery_types, battery_type=battery_type,
                     import_kind=import_kind, csv_text=csv_text, headers=headers, mapping=mapping,
-                    import_rows=import_rows, errors=errors,
+                    import_rows=import_rows, errors=errors, warnings=warnings,
+                    confirmation_required=confirmation_required,
                 )
             try:
                 commit_import_rows(database, import_kind, import_rows)
@@ -154,9 +159,14 @@ def create_app():
                 return render_template(
                     "import_preview.html", battery_types=battery_types, battery_type=battery_type,
                     import_kind=import_kind, csv_text=csv_text, headers=headers, mapping=mapping,
-                    import_rows=import_rows, errors=[],
+                    import_rows=import_rows, errors=[], warnings=warnings,
                 )
-            flash(f"Importen är klar: {len(import_rows)} rader har lagts till.", "success")
+            skipped_count = sum(import_row["skip"] for import_row in import_rows)
+            imported_count = len(import_rows) - skipped_count
+            message = f"Importen är klar: {imported_count} rader har lagts till."
+            if skipped_count:
+                message += f" {skipped_count} rader med okända batteri-ID:n hoppades över."
+            flash(message, "success")
             return redirect(url_for("battery_list" if import_kind == "batteries" else "index"))
 
         abort(400)
@@ -319,7 +329,7 @@ def create_app():
             voltage = parse_number(request.form.get("voltage", ""))
             country = request.form.get("country", "").strip()
             introduced_month = request.form.get("introduced_month", "").strip()
-            nominal_capacity = parse_number(request.form.get("nominal_capacity_mah", ""))
+            nominal_capacity = parse_integer(request.form.get("nominal_capacity_mah", ""))
             status = request.form.get("status", "Aktiv")
             custom_values = {field["field_key"]: request.form.get(f"custom_{field['field_key']}", "").strip() for field in fields}
             errors = validate_battery(
@@ -421,7 +431,7 @@ def create_app():
             voltage = parse_number(request.form.get("voltage", ""))
             country = request.form.get("country", "").strip()
             introduced_month = request.form.get("introduced_month", "").strip()
-            nominal_capacity = parse_number(request.form.get("nominal_capacity_mah", ""))
+            nominal_capacity = parse_integer(request.form.get("nominal_capacity_mah", ""))
             status = request.form.get("status", "Aktiv")
             errors = validate_battery(
                 database, None, None, brand, chemistry, voltage, introduced_month, nominal_capacity, status
@@ -464,7 +474,7 @@ def create_app():
         if request.method == "POST":
             battery_id = request.form.get("battery_id", type=int)
             charged_on = request.form.get("charged_on", "")
-            capacity = parse_number(request.form.get("capacity_mah", ""))
+            capacity = parse_integer(request.form.get("capacity_mah", ""))
             mode = request.form.get("mode", "")
             current = parse_number(request.form.get("current_a", ""))
             comment = request.form.get("comment", "").strip()
@@ -516,8 +526,47 @@ def get_db():
 
 def initialize_database():
     schema_path = BASE_DIR / "schema.sql"
-    get_db().executescript(schema_path.read_text(encoding="utf-8"))
-    get_db().commit()
+    database = get_db()
+    database.executescript(schema_path.read_text(encoding="utf-8"))
+    migrate_schema(database)
+    database.commit()
+
+
+def migrate_schema(database):
+    columns = database.execute("PRAGMA table_info(charges)").fetchall()
+    current_column = next((column for column in columns if column["name"] == "current_a"), None)
+    if current_column is None or not current_column["notnull"]:
+        return
+
+    database.execute("BEGIN")
+    try:
+        database.execute("ALTER TABLE charges RENAME TO charges_legacy")
+        database.execute(
+            """
+            CREATE TABLE charges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                battery_id INTEGER NOT NULL REFERENCES batteries(id) ON DELETE CASCADE,
+                charged_on TEXT NOT NULL,
+                capacity_mah REAL NOT NULL CHECK(capacity_mah >= 0),
+                mode TEXT NOT NULL CHECK(mode IN ('Activate', 'Charge', 'Analysis')),
+                current_a REAL CHECK(current_a IS NULL OR (current_a >= 0.1 AND current_a <= 2.0)),
+                comment TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        database.execute(
+            """
+            INSERT INTO charges (id, battery_id, charged_on, capacity_mah, mode, current_a, comment, created_at)
+            SELECT id, battery_id, charged_on, capacity_mah, mode, current_a, comment, created_at
+            FROM charges_legacy
+            """
+        )
+        database.execute("DROP TABLE charges_legacy")
+        database.execute("CREATE INDEX idx_charges_battery_date ON charges(battery_id, charged_on DESC)")
+    except sqlite3.Error:
+        database.rollback()
+        raise
 
 
 def get_type_or_404(type_id):
@@ -641,23 +690,58 @@ def build_battery_identifier(battery_type, sequence):
     return f"{battery_type['code']}-{sequence_number:0{number_width}d}", None
 
 
-def parse_csv_text(csv_text):
+def parse_csv_text(csv_text, import_kind):
     cleaned_text = csv_text.lstrip("﻿").strip()
     if not cleaned_text:
         raise ValueError("Klistra in CSV-data innan du fortsätter.")
-    try:
-        dialect = csv.Sniffer().sniff(cleaned_text[:4096], delimiters=";,	|")
-    except csv.Error:
-        dialect = csv.excel
-        dialect.delimiter = ";"
-    parsed_rows = list(csv.reader(io.StringIO(cleaned_text), dialect))
-    if len(parsed_rows) < 2:
+    if "	" in cleaned_text:
+        parsed_rows = list(csv.reader(io.StringIO(cleaned_text), delimiter="	"))
+    else:
+        try:
+            dialect = csv.Sniffer().sniff(cleaned_text[:4096], delimiters=";,|")
+        except csv.Error:
+            dialect = csv.excel
+            dialect.delimiter = ";"
+        parsed_rows = list(csv.reader(io.StringIO(cleaned_text), dialect))
+    if not parsed_rows:
+        raise ValueError("CSV-data saknar datarader.")
+    headerless = import_kind == "charges" and is_import_date(parsed_rows[0][0] if parsed_rows[0] else "")
+    if not headerless and len(parsed_rows) < 2:
         raise ValueError("CSV-data måste innehålla en rubrikrad och minst en datarad.")
-    headers = [header.strip() or f"Kolumn {index + 1}" for index, header in enumerate(parsed_rows[0])]
-    rows = [row for row in parsed_rows[1:] if any(cell.strip() for cell in row)]
+    if headerless:
+        headers = [
+            "Datum", "Batteri-ID", "Uppmätt kapacitet (mAh)", "Laddningsläge",
+            "Ström (A)", "Kommentar",
+        ]
+        rows = [row for row in parsed_rows if any(cell.strip() for cell in row)]
+    else:
+        headers = [header.strip() or f"Kolumn {index + 1}" for index, header in enumerate(parsed_rows[0])]
+        rows = [row for row in parsed_rows[1:] if any(cell.strip() for cell in row)]
     if not rows:
         raise ValueError("CSV-data saknar datarader.")
-    return headers, rows
+    return headers, rows, headerless
+
+
+def is_import_date(value):
+    return any(
+        try_parse_date(value, date_format) is not None
+        for date_format in ("%Y-%m-%d", "%m/%d/%Y")
+    )
+
+
+def try_parse_date(value, date_format):
+    try:
+        return datetime.strptime(value.strip(), date_format)
+    except (AttributeError, ValueError):
+        return None
+
+
+def normalize_import_date(value):
+    for date_format in ("%Y-%m-%d", "%m/%d/%Y"):
+        parsed_date = try_parse_date(value, date_format)
+        if parsed_date is not None:
+            return parsed_date.date().isoformat()
+    return value.strip()
 
 
 def get_import_options(import_kind, battery_type):
@@ -695,9 +779,10 @@ def normalize_import_header(header):
 
 def suggest_import_mapping(headers, import_options):
     valid_targets = {option[0] for option in import_options}
+    identifier_target = "battery_identifier" if "battery_identifier" in valid_targets else "identifier"
     header_aliases = {
-        "id": "identifier",
-        "batteriid": "identifier",
+        "id": identifier_target,
+        "batteriid": identifier_target,
         "marke": "brand",
         "brand": "brand",
         "kemi": "chemistry",
@@ -714,9 +799,11 @@ def suggest_import_mapping(headers, import_options):
         "senastladdad": "last_charged",
         "datum": "charged_on",
         "uppmattkapacitet": "capacity_mah",
+        "uppmattkapacitetmah": "capacity_mah",
         "kapacitet": "capacity_mah",
         "laddningslage": "mode",
         "strom": "current_a",
+        "stroma": "current_a",
         "kommentar": "comment",
     }
     custom_headers = {
@@ -747,7 +834,7 @@ def validate_import_mapping(import_kind, mapping):
     required_targets = (
         {"identifier", "brand", "chemistry", "voltage", "introduced_month", "nominal_capacity_mah", "status"}
         if import_kind == "batteries"
-        else {"battery_identifier", "charged_on", "capacity_mah", "mode", "current_a"}
+        else {"battery_identifier", "charged_on", "capacity_mah", "mode"}
     )
     missing_targets = required_targets - set(selected_targets)
     if missing_targets:
@@ -760,13 +847,14 @@ def validate_import_mapping(import_kind, mapping):
     return errors
 
 
-def build_import_rows(database, import_kind, battery_type, headers, rows, mapping):
+def build_import_rows(database, import_kind, battery_type, headers, rows, mapping, row_number_start=2):
     errors = validate_import_mapping(import_kind, mapping)
     if errors:
-        return [], errors
+        return [], errors, []
     import_rows = []
+    warnings = []
     seen_identifiers = set()
-    for index, row in enumerate(rows, start=2):
+    for index, row in enumerate(rows, start=row_number_start):
         row_errors = []
         if import_kind == "batteries":
             identifier = get_mapped_value(row, mapping, "identifier").upper()
@@ -775,7 +863,7 @@ def build_import_rows(database, import_kind, battery_type, headers, rows, mappin
             voltage = parse_number(get_mapped_value(row, mapping, "voltage"))
             country = get_mapped_value(row, mapping, "country")
             introduced_month = get_mapped_value(row, mapping, "introduced_month")
-            nominal_capacity = parse_number(get_mapped_value(row, mapping, "nominal_capacity_mah"))
+            nominal_capacity = parse_integer(get_mapped_value(row, mapping, "nominal_capacity_mah"))
             status = get_mapped_value(row, mapping, "status")
             if not re.fullmatch(rf"{re.escape(battery_type['code'])}-\d+", identifier):
                 row_errors.append(f"ID måste börja med {battery_type['code']}- och sluta med siffror.")
@@ -794,8 +882,8 @@ def build_import_rows(database, import_kind, battery_type, headers, rows, mappin
             }
             measurement = None
             if "latest_capacity_mah" in mapping.values():
-                latest_capacity = parse_number(get_mapped_value(row, mapping, "latest_capacity_mah"))
-                last_charged = get_mapped_value(row, mapping, "last_charged")
+                latest_capacity = parse_integer(get_mapped_value(row, mapping, "latest_capacity_mah"))
+                last_charged = normalize_import_date(get_mapped_value(row, mapping, "last_charged"))
                 try:
                     datetime.strptime(last_charged, "%Y-%m-%d")
                 except ValueError:
@@ -815,6 +903,8 @@ def build_import_rows(database, import_kind, battery_type, headers, rows, mappin
                     "label": identifier or "Saknat ID",
                     "summary": f"{brand or 'Saknat märke'} · {status or 'Saknad status'}",
                     "errors": row_errors,
+                    "warnings": [],
+                    "skip": False,
                     "values": {
                         "type_id": battery_type["id"], "identifier": identifier, "brand": brand,
                         "chemistry": chemistry, "voltage": voltage, "country": country,
@@ -826,23 +916,30 @@ def build_import_rows(database, import_kind, battery_type, headers, rows, mappin
         else:
             identifier = get_mapped_value(row, mapping, "battery_identifier").upper()
             battery = database.execute("SELECT id FROM batteries WHERE identifier = ?", (identifier,)).fetchone()
-            charged_on = get_mapped_value(row, mapping, "charged_on")
-            capacity = parse_number(get_mapped_value(row, mapping, "capacity_mah"))
+            charged_on = normalize_import_date(get_mapped_value(row, mapping, "charged_on"))
+            capacity = parse_integer(get_mapped_value(row, mapping, "capacity_mah"))
             mode = get_mapped_value(row, mapping, "mode")
             current = parse_number(get_mapped_value(row, mapping, "current_a"))
             comment = get_mapped_value(row, mapping, "comment")
+            row_warnings = []
             if battery is None:
-                row_errors.append(f"Batteriet {identifier or 'utan ID'} finns inte.")
+                row_warnings.append(f"Batteriet {identifier or 'utan ID'} finns inte och raden hoppas över.")
                 battery_id = None
+                skip = True
             else:
                 battery_id = battery["id"]
-            row_errors.extend(validate_charge(database, battery_id, charged_on, capacity, mode, current))
+                skip = False
+                row_errors.extend(
+                    validate_charge(database, battery_id, charged_on, capacity, mode, current, allow_unknown_current=True)
+                )
             import_rows.append(
                 {
                     "row_number": index,
                     "label": identifier or "Saknat ID",
                     "summary": f"{charged_on or 'Saknat datum'} · {capacity if capacity is not None else '–'} mAh",
                     "errors": row_errors,
+                    "warnings": row_warnings,
+                    "skip": skip,
                     "values": {
                         "battery_id": battery_id, "charged_on": charged_on, "capacity_mah": capacity,
                         "mode": mode, "current_a": current, "comment": comment,
@@ -852,11 +949,15 @@ def build_import_rows(database, import_kind, battery_type, headers, rows, mappin
     for import_row in import_rows:
         for error in import_row["errors"]:
             errors.append(f"Rad {import_row['row_number']} ({import_row['label']}): {error}")
-    return import_rows, errors
+        for warning in import_row["warnings"]:
+            warnings.append(f"Rad {import_row['row_number']} ({import_row['label']}): {warning}")
+    return import_rows, errors, warnings
 
 
 def commit_import_rows(database, import_kind, import_rows):
     for import_row in import_rows:
+        if import_row["skip"]:
+            continue
         values = import_row["values"]
         if import_kind == "batteries":
             cursor = database.execute(
@@ -900,6 +1001,14 @@ def parse_number(value):
         return None
 
 
+def parse_integer(value):
+    try:
+        parsed_value = Decimal(value.strip())
+    except (AttributeError, InvalidOperation):
+        return None
+    return int(parsed_value) if parsed_value == parsed_value.to_integral_value() else None
+
+
 def validate_battery(
     database, battery_type, identifier, brand, chemistry, voltage, introduced_month,
     nominal_capacity, status, allow_unknown_introduced_month=False,
@@ -918,13 +1027,13 @@ def validate_battery(
     elif not introduced_month and not allow_unknown_introduced_month:
         errors.append("Introduktionsmånad ska anges som ÅÅÅÅ-MM.")
     if nominal_capacity is None or nominal_capacity <= 0:
-        errors.append("Ange en märkning i mAh större än noll.")
+        errors.append("Ange en märkning i mAh som ett heltal större än noll.")
     if status not in {"Aktiv", "Väntande", "Ej aktivt"}:
         errors.append("Ogiltig status.")
     return errors
 
 
-def validate_charge(database, battery_id, charged_on, capacity, mode, current):
+def validate_charge(database, battery_id, charged_on, capacity, mode, current, allow_unknown_current=False):
     errors = []
     if not battery_id or not database.execute("SELECT 1 FROM batteries WHERE id = ?", (battery_id,)).fetchone():
         errors.append("Välj ett giltigt batteri.")
@@ -933,10 +1042,14 @@ def validate_charge(database, battery_id, charged_on, capacity, mode, current):
     except (TypeError, ValueError):
         errors.append("Ange ett giltigt datum.")
     if capacity is None or capacity < 0:
-        errors.append("Ange en uppmätt kapacitet på minst 0 mAh.")
+        errors.append("Ange en uppmätt kapacitet som ett heltal på minst 0 mAh.")
     if mode not in {"Activate", "Charge", "Analysis"}:
         errors.append("Välj ett giltigt laddningsläge.")
-    if current is None or current < 0.1 or current > 2.0 or abs(current * 10 - round(current * 10)) > 0.00001:
+    if current is None and not allow_unknown_current:
+        errors.append("Ström ska vara mellan 0,1 och 2,0 A i steg om 0,1 A.")
+    elif current is not None and (
+        current < 0.1 or current > 2.0 or abs(current * 10 - round(current * 10)) > 0.00001
+    ):
         errors.append("Ström ska vara mellan 0,1 och 2,0 A i steg om 0,1 A.")
     return errors
 

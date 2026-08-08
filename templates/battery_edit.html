@@ -11,7 +11,7 @@
     <label>Spänning (V)<input name="voltage" type="text" inputmode="decimal" value="{{ request.form.get('voltage', battery.voltage|swedish_number(1)) }}" required></label>
     <label>Tillverkningsland<input name="country" value="{{ request.form.get('country', battery.country or '') }}"></label>
     <label>Introduktionsmånad<input name="introduced_month" type="month" value="{{ request.form.get('introduced_month', battery.introduced_month) }}" required></label>
-    <label>mAh (märkning)<input name="nominal_capacity_mah" type="text" inputmode="decimal" value="{{ request.form.get('nominal_capacity_mah', battery.nominal_capacity_mah|swedish_number) }}" required></label>
+    <label>mAh (märkning)<input name="nominal_capacity_mah" type="text" inputmode="numeric" pattern="\d+" value="{{ request.form.get('nominal_capacity_mah', battery.nominal_capacity_mah|swedish_number) }}" required></label>
     <label>Status<select name="status">{% for status in ['Aktiv', 'Väntande', 'Ej aktivt'] %}<option {% if request.form.get('status', battery.status) == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></label>
   </div>
   {% if fields %}

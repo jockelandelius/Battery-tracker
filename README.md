@@ -41,8 +41,13 @@ SECRET_KEY=valfri-hemlig-strang .venv/bin/python app.py
 Välj `Importera` i huvudmenyn, välj importtyp och klistra in CSV-data. För batterier väljer
 du först batterityp och mappar sedan rubrikerna mot dess fält. Importen validerar samtliga
 rader före bekräftelse, så att inga data sparas om det finns fel. Semikolon rekommenderas
-som avgränsare när värden använder svenska decimaler. Skriv `?` för en okänd valfri uppgift,
-exempelvis introduktionsmånad; den importeras då som tom.
+som avgränsare när värden använder svenska decimaler. Laddningshistorik kan även klistras in
+utan rubrikrad (datum, batteri-ID, mAh, laddningsläge, ström, kommentar), med tabbar som
+avgränsare. Datum kan anges som `YYYY-MM-DD` eller amerikanskt `M/D/YYYY`; tom ström importeras
+som okänd. Batteri-ID matchas globalt, så flera batterityper kan finnas i samma laddningsimport.
+Saknas ett batteri-ID i databasen visas det som en godkännbar varning; du kan då fortsätta och
+låta just dessa rader hoppas över. mAh-värden anges alltid som heltal.
+Skriv `?` för en okänd valfri uppgift, exempelvis introduktionsmånad; den importeras då som tom.
 
 ## Installera i Proxmox LXC
 
