@@ -17,7 +17,7 @@
   <div class="form-grid">
     <label>Datum (ÅÅÅÅ-MM-DD)<input name="charged_on" type="text" inputmode="numeric" pattern="\d{4}-\d{2}-\d{2}" value="{{ request.form.get('charged_on', today) }}" placeholder="2026-08-06" required><small>Datum sparas alltid i formatet 2026-08-06.</small></label>
     <label>Uppmätt kapacitet (mAh)<input name="capacity_mah" type="text" inputmode="numeric" pattern="\d+" value="{{ request.form.capacity_mah or '' }}" placeholder="1123" required></label>
-    <label>Laddningsläge<select name="mode" required>{% for mode in ['Activate', 'Charge', 'Analysis'] %}<option {% if (request.form.mode or 'Charge') == mode %}selected{% endif %}>{{ mode }}</option>{% endfor %}</select></label>
+    <label>Laddningsläge<select name="mode" required>{% for mode in ['Activate', 'Charge', 'Analysis'] %}<option {% if (request.form.mode or 'Activate') == mode %}selected{% endif %}>{{ mode }}</option>{% endfor %}</select></label>
     <label>Ström (A)<select name="current_a" required>{% for tenths in range(1, 21) %}{% set current = tenths / 10 %}<option value="{{ '%.1f'|format(current) }}" {% if (request.form.current_a or '0.5') == '%.1f'|format(current) %}selected{% endif %}>{{ current|swedish_number(1) }} A</option>{% endfor %}</select></label>
   </div>
   <label>Kommentar <span class="optional">valfri</span><textarea name="comment" rows="4" placeholder="Exempelvis resultat eller observationer">{{ request.form.comment or '' }}</textarea></label>
