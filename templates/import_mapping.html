@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Mappa CSV · Batteribanken{% endblock %}
+{% block content %}
+<style>.mapping-list{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:18px}.mapping-row{display:grid;grid-template-columns:minmax(160px,1fr) 24px minmax(220px,1fr);align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}.mapping-row:last-child{border-bottom:0}.mapping-row select{margin:0}@media(max-width:620px){.mapping-row{grid-template-columns:1fr 20px 1fr;padding:10px}.mapping-row strong{word-break:break-word}}</style>
+<section class="page-title"><div><p class="eyebrow">IMPORT · STEG 2 AV 3</p><h1>Mappa kolumner</h1><p>{{ row_count }} datarader hittades. Koppla varje CSV-rubrik till ett fält eller ignorera den.</p></div></section>
+<form method="post" class="form-card wide-form">
+  <input type="hidden" name="action" value="preview"><input type="hidden" name="import_kind" value="{{ import_kind }}">{% if battery_type %}<input type="hidden" name="type_id" value="{{ battery_type.id }}">{% endif %}<textarea name="csv_text" hidden>{{ csv_text }}</textarea>
+  <div class="mapping-list">{% for header in headers %}{% set column_index = loop.index0 %}<div class="mapping-row"><strong>{{ header }}</strong><span>→</span><select name="mapping_{{ column_index }}">{% for value, label in import_options %}<option value="{{ value }}" {% if suggested_mapping[column_index] == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>{% endfor %}</div>
+  {% if import_kind == 'batteries' %}<p class="muted">Om du mappar både “Senaste mAh” och “Senast laddad” skapas en importerad mätning med läget Analysis och 0,1 A.</p>{% endif %}
+  <div class="form-actions"><a href="{{ url_for('data_import') }}">Börja om</a><button class="button primary" type="submit">Förhandsgranska import</button></div>
+</form>
+{% endblock %}

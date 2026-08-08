@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Ny batterityp · Batteribanken{% endblock %}
+{% block content %}
+<section class="page-title"><div><p class="eyebrow">KONFIGURATION</p><h1>Ny batterityp</h1><p>Grundfälten finns på alla batterier. Lägg till extra fält som bara gäller denna typ.</p></div></section>
+<form method="post" class="form-card wide-form">
+  <div class="form-grid"><label>Typkod <input name="code" value="{{ request.form.code or '' }}" placeholder="AAA" maxlength="20" required><small>Används i ID, exempel: AAA-065.</small></label><label>Namn <input name="name" value="{{ request.form.name or '' }}" placeholder="AAA-batteri" required></label></div>
+  <label>Beskrivning <textarea name="description" rows="3" placeholder="Valfri beskrivning">{{ request.form.description or '' }}</textarea></label>
+  <fieldset><legend>Extra fält för denna typ</legend><p class="muted">Exempel: Diameter, Skyddskrets eller Köpt från. Fälten visas när ett batteri registreras.</p><div id="custom-fields">{% for field in custom_fields %}<div class="inline-field"><input name="field_label[]" value="{{ field.label }}" placeholder="Fältnamn"><button class="icon-button remove-field" type="button" aria-label="Ta bort fält">×</button></div>{% endfor %}</div><button class="button secondary" id="add-field" type="button">+ Lägg till fält</button></fieldset>
+  <div class="form-actions"><a href="{{ url_for('type_list') }}">Avbryt</a><button class="button primary" type="submit">Spara batterityp</button></div>
+</form>
+<template id="field-template"><div class="inline-field"><input name="field_label[]" placeholder="Fältnamn"><button class="icon-button remove-field" type="button" aria-label="Ta bort fält">×</button></div></template>
+<script>const fields=document.getElementById('custom-fields');document.getElementById('add-field').addEventListener('click',()=>fields.append(document.getElementById('field-template').content.cloneNode(true)));fields.addEventListener('click',event=>{if(event.target.classList.contains('remove-field')) event.target.parentElement.remove()});</script>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="hero">
+  <div><p class="eyebrow">BATTERIREGISTER</p><h1>Håll koll på varje<br>batteris verkliga hälsa.</h1><p class="lead">Registrera, följ och jämför kapaciteten över tid.</p></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><a class="button secondary" href="{{ url_for('battery_new') }}">+ Nytt batteri</a><a class="button primary" href="{{ url_for('charge_new') }}">Registrera laddning</a></div>
+</section>
+<section class="stats" aria-label="Snabbstatistik">
+  <article><span>Batterityper</span><strong>{{ type_count }}</strong></article>
+  <article><span>Registrerade batterier</span><strong>{{ battery_count }}</strong></article>
+  <article><span>Aktiva batterier</span><strong>{{ active_count }}</strong></article>
+</section>
+<section class="section-heading"><div><p class="eyebrow">DIN SAMLING</p><h2>Batterityper</h2></div><a href="{{ url_for('type_new') }}">+ Ny batterityp</a></section>
+{% if battery_types %}
+<div class="type-grid">
+  {% for type in battery_types %}<a class="type-card" href="{{ url_for('type_detail', type_id=type.id) }}"><span class="type-code">{{ type.code }}</span><h3>{{ type.name }}</h3><p>{{ type.battery_count }} batteri{{ '' if type.battery_count == 1 else 'er' }}</p><span class="arrow">→</span></a>{% endfor %}
+</div>
+{% else %}
+<div class="empty"><h3>Börja med en batterityp</h3><p>Skapa exempelvis AA, AAA eller 18650 och lägg sedan till dina individuella batterier.</p><a class="button primary" href="{{ url_for('type_new') }}">Skapa batterityp</a></div>
+{% endif %}
+<section class="section-heading compact"><div><p class="eyebrow">SENASTE AKTIVITET</p><h2>Senaste laddningar</h2></div></section>
+{% if recent_charges %}
+<div class="table-wrap"><table><thead><tr><th>Batteri</th><th>Datum</th><th>Kapacitet</th><th>Läge</th><th>Ström</th></tr></thead><tbody>{% for charge in recent_charges %}<tr><td><a href="{{ url_for('battery_detail', battery_id=charge.battery_id) }}">{{ charge.identifier }}</a></td><td>{{ charge.charged_on|iso_date }}</td><td>{{ charge.capacity_mah|swedish_number }} mAh</td><td>{{ charge.mode }}</td><td>{{ charge.current_a|swedish_number(1) }} A</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<p class="muted">Inga laddningar har registrerats ännu.</p>{% endif %}
+{% endblock %}

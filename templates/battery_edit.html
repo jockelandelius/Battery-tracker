@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Redigera {{ battery.identifier }} · Batteribanken{% endblock %}
+{% block content %}
+<section class="page-title"><div><p class="eyebrow">{{ battery.type_code }} · BATTERI</p><h1>Redigera {{ battery.identifier }}</h1><p>ID och batterityp låses för att behålla kopplingen till laddningshistoriken.</p></div></section>
+<form method="post" class="form-card wide-form">
+  <div class="form-grid">
+    <label>ID <input value="{{ battery.identifier }}" disabled></label>
+    <label>Batterityp <input value="{{ battery.type_code }} · {{ battery.type_name }}" disabled></label>
+    <label>Märke <input name="brand" value="{{ request.form.get('brand', battery.brand) }}" required></label>
+    <label>Kemi <input name="chemistry" value="{{ request.form.get('chemistry', battery.chemistry) }}" required></label>
+    <label>Spänning (V)<input name="voltage" type="text" inputmode="decimal" value="{{ request.form.get('voltage', battery.voltage|swedish_number(1)) }}" required></label>
+    <label>Tillverkningsland<input name="country" value="{{ request.form.get('country', battery.country or '') }}"></label>
+    <label>Introduktionsmånad<input name="introduced_month" type="month" value="{{ request.form.get('introduced_month', battery.introduced_month) }}" required></label>
+    <label>mAh (märkning)<input name="nominal_capacity_mah" type="text" inputmode="decimal" value="{{ request.form.get('nominal_capacity_mah', battery.nominal_capacity_mah|swedish_number) }}" required></label>
+    <label>Status<select name="status">{% for status in ['Aktiv', 'Väntande', 'Ej aktivt'] %}<option {% if request.form.get('status', battery.status) == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></label>
+  </div>
+  {% if fields %}
+  <fieldset><legend>Extra fält för {{ battery.type_code }}</legend><div class="form-grid">{% for field in fields %}<label>{{ field.label }}<input name="custom_{{ field.field_key }}" value="{{ request.form.get('custom_' ~ field.field_key, custom_values.get(field.field_key, '')) }}"></label>{% endfor %}</div></fieldset>
+  {% endif %}
+  <div class="form-actions"><a href="{{ url_for('battery_detail', battery_id=battery.id) }}">Avbryt</a><button class="button primary" type="submit">Spara ändringar</button></div>
+</form>
+{% endblock %}

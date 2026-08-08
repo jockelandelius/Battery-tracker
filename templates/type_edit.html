@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Redigera {{ battery_type.code }} · Batteribanken{% endblock %}
+{% block content %}
+<style>.field-lock{flex:0 0 auto;border-radius:999px;background:#edf1f1;color:#526166;font-size:.75rem;font-weight:800;padding:7px 9px}.locked-field{align-items:flex-start}.danger-zone{max-width:900px;margin-top:26px;padding:24px;border:1px solid #edcaca;border-radius:14px;background:#fff9f9}.danger-zone h2{font-size:1.1rem;margin-bottom:8px}.danger-zone p{color:#66767b;margin-bottom:16px}.danger{background:#b43d3d;color:#fff}.page-actions{display:flex;gap:10px;flex-wrap:wrap}</style>
+<section class="page-title"><div><p class="eyebrow">KONFIGURATION</p><h1>Redigera {{ battery_type.code }}</h1><p>{{ battery_count }} registrerat batteri{{ '' if battery_count == 1 else 'er' }} av denna typ.</p></div></section>
+<form method="post" class="form-card wide-form">
+  <div class="form-grid">
+    <label>Typkod
+      {% if battery_count %}<input type="hidden" name="code" value="{{ battery_type.code }}"><input value="{{ battery_type.code }}" disabled><small>Typkoden låses när batterier har registrerats.</small>{% else %}<input name="code" value="{{ request.form.code or battery_type.code }}" maxlength="20" required><small>Används i ID, exempel: AAA-065.</small>{% endif %}
+    </label>
+    <label>Namn <input name="name" value="{{ request.form.name or battery_type.name }}" required></label>
+  </div>
+  <label>Beskrivning <textarea name="description" rows="3">{{ request.form.get('description', battery_type.description or '') }}</textarea></label>
+  <fieldset>
+    <legend>Extra fält för denna typ</legend>
+    <p class="muted">Fält med sparad data låses. Tomma fält kan byta namn eller tas bort.</p>
+    <div id="custom-fields">
+      {% for field in fields %}
+      <div class="inline-field{% if field.has_data %} locked-field{% endif %}">
+        <input name="field_label_{{ field.id }}" value="{{ request.form.get('field_label_' ~ field.id, field.label) }}" placeholder="Fältnamn" {% if field.has_data %}readonly{% endif %}>
+        {% if field.has_data %}<span class="field-lock">Har data</span>{% else %}<button class="icon-button remove-field" type="button" aria-label="Ta bort fält">×</button>{% endif %}
+      </div>
+      {% endfor %}
+      {% for label in new_fields %}<div class="inline-field"><input name="new_field_label[]" value="{{ label }}" placeholder="Fältnamn"><button class="icon-button remove-field" type="button" aria-label="Ta bort fält">×</button></div>{% endfor %}
+    </div>
+    <button class="button secondary" id="add-field" type="button">+ Lägg till fält</button>
+  </fieldset>
+  <div class="form-actions"><a href="{{ url_for('type_detail', type_id=battery_type.id) }}">Avbryt</a><button class="button primary" type="submit">Spara ändringar</button></div>
+</form>
+<section class="danger-zone"><h2>Ta bort batterityp</h2>{% if battery_count %}<p>Typen kan inte tas bort så länge den har {{ battery_count }} registrerat batteri{{ '' if battery_count == 1 else 'er' }}.</p>{% else %}<p>Inga batterier är knutna till typen. Borttagningen kan inte ångras.</p><form method="post" action="{{ url_for('type_delete', type_id=battery_type.id) }}" onsubmit="return confirm('Ta bort batteritypen {{ battery_type.code }}?')"><button class="button danger" type="submit">Ta bort batterityp</button></form>{% endif %}</section>
+<template id="field-template"><div class="inline-field"><input name="new_field_label[]" placeholder="Fältnamn"><button class="icon-button remove-field" type="button" aria-label="Ta bort fält">×</button></div></template>
+<script>const fields=document.getElementById('custom-fields');document.getElementById('add-field').addEventListener('click',()=>fields.append(document.getElementById('field-template').content.cloneNode(true)));fields.addEventListener('click',event=>{if(event.target.classList.contains('remove-field')) event.target.parentElement.remove()});</script>
+{% endblock %}

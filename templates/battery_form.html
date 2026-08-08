@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Nytt batteri · Batteribanken{% endblock %}
+{% block content %}
+<section class="page-title">
+  <div><p class="eyebrow">REGISTER</p><h1>Nytt batteri</h1><p>Grunduppgifter är gemensamma för alla typer.</p></div>
+</section>
+{% if battery_types %}
+<form method="post" class="form-card wide-form">
+  <input type="hidden" name="type_id" value="{{ battery_type.id if battery_type else '' }}">
+  <div class="form-grid">
+    <label>Batterityp
+      <select onchange="window.location=this.value">
+        <option value="">Välj typ</option>
+        {% for type in battery_types %}<option value="{{ url_for('battery_new', type_id=type.id) }}" {% if battery_type and battery_type.id == type.id %}selected{% endif %}>{{ type.code }} · {{ type.name }}</option>{% endfor %}
+      </select>
+      <small>Välj typ först för att se dess extra fält.</small>
+    </label>
+    <label>Löpnummer ({{ battery_type.code if battery_type else 'AAA' }}-) <input name="sequence" value="{{ request.form.sequence or next_sequence }}" inputmode="numeric" pattern="[0-9]+" placeholder="{{ next_sequence }}" required {% if not battery_type %}disabled{% endif %}><small>Föreslaget ID: {{ battery_type.code if battery_type else 'AAA' }}-{{ next_sequence }}</small></label>
+    <label>Märke <input name="brand" value="{{ request.form.brand or '' }}" placeholder="IKEA LADDA" required {% if not battery_type %}disabled{% endif %}></label>
+    <label>Kemi <input name="chemistry" value="{{ request.form.chemistry or '' }}" placeholder="NiMH" required {% if not battery_type %}disabled{% endif %}></label>
+    <label>Spänning (V)<input name="voltage" type="text" inputmode="decimal" value="{{ request.form.voltage or '' }}" placeholder="1,2" required {% if not battery_type %}disabled{% endif %}></label>
+    <label>Tillverkningsland<input name="country" value="{{ request.form.country or '' }}" placeholder="Japan" {% if not battery_type %}disabled{% endif %}></label>
+    <label>Introduktionsmånad<input name="introduced_month" type="month" value="{{ request.form.introduced_month or '' }}" required {% if not battery_type %}disabled{% endif %}></label>
+    <label>mAh (märkning)<input name="nominal_capacity_mah" type="text" inputmode="decimal" value="{{ request.form.nominal_capacity_mah or '' }}" placeholder="750" required {% if not battery_type %}disabled{% endif %}></label>
+    <label>Status<select name="status" {% if not battery_type %}disabled{% endif %}>{% for status in ['Aktiv', 'Väntande', 'Ej aktivt'] %}<option {% if (request.form.status or 'Aktiv') == status %}selected{% endif %}>{{ status }}</option>{% endfor %}</select></label>
+  </div>
+  {% if fields %}
+  <fieldset><legend>Extra fält för {{ battery_type.code }}</legend><div class="form-grid">{% for field in fields %}<label>{{ field.label }}<input name="custom_{{ field.field_key }}" value="{{ request.form['custom_' ~ field.field_key] or '' }}"></label>{% endfor %}</div></fieldset>
+  {% endif %}
+  <div class="form-actions"><a href="{{ url_for('type_detail', type_id=battery_type.id) if battery_type else url_for('index') }}">Avbryt</a><button class="button primary" type="submit" {% if not battery_type %}disabled{% endif %}>Spara batteri</button></div>
+</form>
+{% else %}
+<div class="empty"><h3>Det finns inga batterityper</h3><p>Skapa en typ innan du registrerar ett batteri.</p><a class="button primary" href="{{ url_for('type_new') }}">Skapa batterityp</a></div>
+{% endif %}
+{% endblock %}

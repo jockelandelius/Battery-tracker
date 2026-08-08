@@ -1,0 +1,15 @@
+services:
+  battery-tracker:
+    build: .
+    image: battery-tracker:latest
+    container_name: battery-tracker
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env before starting}
+    volumes:
+      - battery-data:/data
+    restart: unless-stopped
+
+volumes:
+  battery-data:

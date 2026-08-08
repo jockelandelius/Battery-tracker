@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block title %}Batterityper · Batteribanken{% endblock %}
+{% block content %}
+<section class="page-title"><div><p class="eyebrow">KONFIGURATION</p><h1>Batterityper</h1><p>Varje typ har ett eget prefix och kan få egna extra fält.</p></div><a class="button primary" href="{{ url_for('type_new') }}">+ Ny batterityp</a></section>
+{% if battery_types %}<div class="type-grid">{% for type in battery_types %}<a class="type-card" href="{{ url_for('type_detail', type_id=type.id) }}"><span class="type-code">{{ type.code }}</span><h3>{{ type.name }}</h3><p>{{ type.battery_count }} batteri{{ '' if type.battery_count == 1 else 'er' }}</p><span class="arrow">→</span></a>{% endfor %}</div>{% else %}<div class="empty"><p>Du har ännu inte skapat någon batterityp.</p></div>{% endif %}
+{% endblock %}

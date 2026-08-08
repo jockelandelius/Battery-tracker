@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}{{ battery.identifier }} · Batteribanken{% endblock %}
+{% block content %}
+<style>
+  .chart-card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-top:18px}.chart-card h2{font-size:1.1rem;margin-bottom:4px}.chart-card p{color:var(--muted);font-size:.86rem;margin-bottom:16px}.capacity-chart{display:block;width:100%;height:auto}.chart-legend{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:.8rem;margin-top:8px}.chart-legend span{display:flex;align-items:center;gap:6px}.legend-dot,.legend-line{display:inline-block;width:20px}.legend-dot{height:8px;border-radius:99px;background:var(--teal)}.legend-line{border-top:2px dashed #a76b00}.delete-charge{border:0;background:none;color:var(--bad);font:inherit;font-weight:750;cursor:pointer;padding:0}.delete-charge:hover{text-decoration:underline}
+</style>
+<section class="page-title"><div><p class="eyebrow">{{ battery.type_code }} · BATTERI</p><h1>{{ battery.identifier }}</h1><p>{{ battery.brand }} · {{ battery.chemistry }} · {{ battery.voltage|swedish_number(1) }} V</p></div><div style="display:flex;gap:10px;flex-wrap:wrap"><a class="button secondary" href="{{ url_for('battery_edit', battery_id=battery.id) }}">Redigera batteri</a><a class="button primary" href="{{ url_for('charge_new', battery_id=battery.id) }}">+ Registrera laddning</a></div></section>
+<section class="detail-layout"><article class="detail-card"><h2>Specifikation</h2><dl><div><dt>Märke</dt><dd>{{ battery.brand }}</dd></div><div><dt>Kemi</dt><dd>{{ battery.chemistry }}</dd></div><div><dt>Spänning</dt><dd>{{ battery.voltage|swedish_number(1) }} V</dd></div><div><dt>Tillverkningsland</dt><dd>{{ battery.country or '–' }}</dd></div><div><dt>Introduktionsmånad</dt><dd>{{ battery.introduced_month }}</dd></div><div><dt>mAh (märkning)</dt><dd>{{ battery.nominal_capacity_mah|swedish_number }} mAh</dd></div><div><dt>Status</dt><dd><span class="status {{ battery.status|replace(' ', '-')|lower }}">{{ battery.status }}</span></dd></div>{% for field in fields %}<div><dt>{{ field.label }}</dt><dd>{{ custom_values.get(field.field_key) or '–' }}</dd></div>{% endfor %}</dl></article><article class="detail-card health-summary"><h2>Senaste mätning</h2>{% if latest %}<strong class="capacity">{{ latest.capacity_mah|swedish_number }} <small>mAh</small></strong><span class="health {{ health_class(health) }}">{{ health|swedish_number }}% hälsa</span><p>Registrerad {{ latest.charged_on }} med {{ latest.mode }} vid {{ latest.current_a|swedish_number(1) }} A.</p>{% else %}<strong class="capacity">–</strong><p>Ingen laddning är registrerad ännu.</p>{% endif %}</article></section>
+{% if chart_points %}
+<section class="chart-card" id="capacity-chart" data-points='{{ chart_points|tojson }}' data-nominal="{{ battery.nominal_capacity_mah }}">
+  <h2>Kapacitet över tid</h2><p>Varje punkt visar uppmätt kapacitet. Den streckade linjen visar märkt kapacitet.</p>
+  <svg class="capacity-chart" viewBox="0 0 760 300" role="img" aria-label="Graf över uppmätt kapacitet i mAh"></svg>
+  <div class="chart-legend"><span><i class="legend-dot"></i>Uppmätt kapacitet</span><span><i class="legend-line"></i>Märkt kapacitet: {{ battery.nominal_capacity_mah|swedish_number }} mAh</span></div>
+</section>
+<script>
+  const chartContainer=document.getElementById("capacity-chart");
+  const chartPoints=JSON.parse(chartContainer.dataset.points);
+  const nominalCapacity=Number(chartContainer.dataset.nominal);
+  const chartSvg=chartContainer.querySelector("svg");
+  const chartWidth=760,chartHeight=300,chartPadding={top:24,right:28,bottom:48,left:68};
+  const chartValues=[nominalCapacity,...chartPoints.map(point=>point.capacity)];
+  const minimumValue=Math.max(0,Math.floor(Math.min(...chartValues)*.9/100)*100);
+  const maximumValue=Math.ceil(Math.max(...chartValues)*1.1/100)*100;
+  const valueRange=Math.max(maximumValue-minimumValue,100);
+  const plotWidth=chartWidth-chartPadding.left-chartPadding.right;
+  const plotHeight=chartHeight-chartPadding.top-chartPadding.bottom;
+  const pointX=index=>chartPoints.length===1?chartPadding.left+plotWidth/2:chartPadding.left+index*plotWidth/(chartPoints.length-1);
+  const pointY=value=>chartPadding.top+(maximumValue-value)*plotHeight/valueRange;
+  const createSvgElement=(tagName,attributes)=>{const element=document.createElementNS("http://www.w3.org/2000/svg",tagName);Object.entries(attributes).forEach(([name,value])=>element.setAttribute(name,value));return element};
+  for(let tickIndex=0;tickIndex<=4;tickIndex++){const tickValue=minimumValue+valueRange*tickIndex/4;const tickY=pointY(tickValue);chartSvg.append(createSvgElement("line",{x1:chartPadding.left,y1:tickY,x2:chartWidth-chartPadding.right,y2:tickY,stroke:"#dce3df","stroke-width":"1"}));const label=createSvgElement("text",{x:chartPadding.left-10,y:tickY+4,"text-anchor":"end",fill:"#66767b","font-size":"12"});label.textContent=Math.round(tickValue)+" mAh";chartSvg.append(label)}
+  const nominalY=pointY(nominalCapacity);
+  chartSvg.append(createSvgElement("line",{x1:chartPadding.left,y1:nominalY,x2:chartWidth-chartPadding.right,y2:nominalY,stroke:"#a76b00","stroke-width":"2","stroke-dasharray":"6 5"}));
+  const pathPoints=chartPoints.map((point,index)=>pointX(index)+","+pointY(point.capacity)).join(" ");
+  if(chartPoints.length>1)chartSvg.append(createSvgElement("polyline",{points:pathPoints,fill:"none",stroke:"#087c75","stroke-width":"3","stroke-linejoin":"round","stroke-linecap":"round"}));
+  const dateFormatter=new Intl.DateTimeFormat("sv-SE",{month:"short",year:"numeric"});
+  chartPoints.forEach((point,index)=>{const x=pointX(index),y=pointY(point.capacity),circle=createSvgElement("circle",{cx:x,cy:y,r:"5",fill:"#087c75",stroke:"#fff","stroke-width":"2"}),title=createSvgElement("title",{});title.textContent=point.date+": "+Math.round(point.capacity)+" mAh";circle.append(title);chartSvg.append(circle);if(index===0||index===chartPoints.length-1){const label=createSvgElement("text",{x,y:chartHeight-18,"text-anchor":"middle",fill:"#66767b","font-size":"12"});label.textContent=dateFormatter.format(new Date(point.date+"T00:00:00"));chartSvg.append(label)}})
+</script>
+{% endif %}
+<section class="section-heading compact"><div><p class="eyebrow">HISTORIK</p><h2>Laddningar</h2></div></section>
+{% if charges %}
+<div class="table-wrap"><table><thead><tr><th>Datum</th><th>Kapacitet</th><th>Läge</th><th>Ström</th><th>Kommentar</th><th></th></tr></thead><tbody>{% for charge in charges %}<tr><td>{{ charge.charged_on }}</td><td>{{ charge.capacity_mah|swedish_number }} mAh</td><td>{{ charge.mode }}</td><td>{{ charge.current_a|swedish_number(1) }} A</td><td>{{ charge.comment or '–' }}</td><td><form method="post" action="{{ url_for('charge_delete', charge_id=charge.id) }}" onsubmit="return confirm('Ta bort laddningen från {{ charge.charged_on }}?')"><button class="delete-charge" type="submit">Ta bort</button></form></td></tr>{% endfor %}</tbody></table></div>
+{% else %}<p class="muted">Ingen laddningshistorik ännu.</p>{% endif %}
+{% endblock %}
