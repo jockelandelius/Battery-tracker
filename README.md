@@ -47,6 +47,8 @@ avgränsare. Datum kan anges som `YYYY-MM-DD` eller amerikanskt `M/D/YYYY`; tom 
 som okänd. Batteri-ID matchas globalt, så flera batterityper kan finnas i samma laddningsimport.
 Saknas ett batteri-ID i databasen visas det som en godkännbar varning; du kan då fortsätta och
 låta just dessa rader hoppas över. mAh-värden anges alltid som heltal.
+En laddning med samma batteri-ID och datum som en befintlig laddning (eller en annan rad i
+samma import) kräver också ett uttryckligt godkännande.
 Skriv `?` för en okänd valfri uppgift, exempelvis introduktionsmånad; den importeras då som tom.
 
 ## Installera i Proxmox LXC

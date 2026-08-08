@@ -141,7 +141,7 @@ def create_app():
                 import_rows=import_rows, errors=errors, warnings=warnings,
             )
         if action == "commit":
-            confirmation_required = warnings and request.form.get("accept_skipped") != "yes"
+            confirmation_required = warnings and request.form.get("accept_warnings") != "yes"
             if errors or confirmation_required:
                 for error in errors:
                     flash(error, "error")
@@ -485,6 +485,15 @@ def create_app():
                 return render_template(
                     "charge_form.html", batteries=batteries, selected_battery_id=battery_id,
                     today=date.today().isoformat(),
+                )
+            duplicate_charge = database.execute(
+                "SELECT 1 FROM charges WHERE battery_id = ? AND charged_on = ?",
+                (battery_id, charged_on),
+            ).fetchone()
+            if duplicate_charge and request.form.get("confirm_duplicate") != "yes":
+                return render_template(
+                    "charge_form.html", batteries=batteries, selected_battery_id=battery_id,
+                    today=date.today().isoformat(), duplicate_charge=True,
                 )
             database.execute(
                 "INSERT INTO charges (battery_id, charged_on, capacity_mah, mode, current_a, comment) VALUES (?, ?, ?, ?, ?, ?)",
@@ -854,6 +863,7 @@ def build_import_rows(database, import_kind, battery_type, headers, rows, mappin
     import_rows = []
     warnings = []
     seen_identifiers = set()
+    seen_charge_dates = set()
     for index, row in enumerate(rows, start=row_number_start):
         row_errors = []
         if import_kind == "batteries":
@@ -905,6 +915,7 @@ def build_import_rows(database, import_kind, battery_type, headers, rows, mappin
                     "errors": row_errors,
                     "warnings": [],
                     "skip": False,
+                    "duplicate": False,
                     "values": {
                         "type_id": battery_type["id"], "identifier": identifier, "brand": brand,
                         "chemistry": chemistry, "voltage": voltage, "country": country,
@@ -926,9 +937,21 @@ def build_import_rows(database, import_kind, battery_type, headers, rows, mappin
                 row_warnings.append(f"Batteriet {identifier or 'utan ID'} finns inte och raden hoppas över.")
                 battery_id = None
                 skip = True
+                duplicate = False
             else:
                 battery_id = battery["id"]
                 skip = False
+                charge_key = (battery_id, charged_on)
+                existing_charge = database.execute(
+                    "SELECT 1 FROM charges WHERE battery_id = ? AND charged_on = ?",
+                    charge_key,
+                ).fetchone()
+                duplicate = existing_charge is not None or charge_key in seen_charge_dates
+                if existing_charge:
+                    row_warnings.append(f"Batteriet har redan en laddning registrerad {charged_on}.")
+                elif charge_key in seen_charge_dates:
+                    row_warnings.append(f"Importen innehåller redan en laddning för batteriet {charged_on}.")
+                seen_charge_dates.add(charge_key)
                 row_errors.extend(
                     validate_charge(database, battery_id, charged_on, capacity, mode, current, allow_unknown_current=True)
                 )
@@ -940,6 +963,7 @@ def build_import_rows(database, import_kind, battery_type, headers, rows, mappin
                     "errors": row_errors,
                     "warnings": row_warnings,
                     "skip": skip,
+                    "duplicate": duplicate,
                     "values": {
                         "battery_id": battery_id, "charged_on": charged_on, "capacity_mah": capacity,
                         "mode": mode, "current_a": current, "comment": comment,
