@@ -4,6 +4,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import unicodedata
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -17,10 +18,27 @@ DATABASE_PATH = Path(os.environ.get("DATABASE_PATH", BASE_DIR / "data" / "batter
 ID_PREFIX_PATTERN = re.compile(r"^[A-Z0-9_-]+$")
 
 
+def get_app_version(base_dir=BASE_DIR):
+    release_path = base_dir / ".release"
+    if release_path.is_file():
+        release = release_path.read_text(encoding="utf-8").strip()
+        if re.fullmatch(r"[0-9a-fA-F]{7,64}", release):
+            return release[:12]
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(base_dir), "rev-parse", "--short=12", "HEAD"],
+            capture_output=True, check=True, text=True, timeout=1,
+        )
+        return result.stdout.strip()
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return "okänd"
+
+
 def create_app():
     app = Flask(__name__)
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-this-secret-before-exposing-the-app")
     app.config["DATABASE"] = DATABASE_PATH
+    app.config["VERSION"] = get_app_version()
 
     @app.teardown_appcontext
     def close_db(exception=None):
@@ -47,6 +65,10 @@ def create_app():
         if health > 80:
             return "health-warning"
         return "health-danger"
+
+    @app.context_processor
+    def inject_app_version():
+        return {"app_version": app.config["VERSION"]}
 
     @app.route("/")
     def index():

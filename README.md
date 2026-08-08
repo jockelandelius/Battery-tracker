@@ -114,8 +114,5 @@ cd /tmp/battery-tracker-source && bash deploy/lxc-install.sh
 rm -rf /tmp/battery-tracker-source
 ```
 
-Därefter finns kommandot `update` tillgängligt.
-
-För en redan skapad container: kör `update` två gånger efter att denna version har släppts.
-Första körningen hämtar det nya uppdateringsskriptet och den andra aktiverar den automatiska
-inloggningen i konsolen.
+Därefter finns kommandot `update` tillgängligt. Sidfoten i webbgränssnittet visar commit-hashen
+för den version som körs.
