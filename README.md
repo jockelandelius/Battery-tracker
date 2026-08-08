@@ -98,6 +98,13 @@ Kommandot hämtar den senaste versionen från projektets `main`-gren på GitHub,
 appfiler och beroenden och startar om tjänsten. Din databas i
 `/var/lib/battery-tracker/battery_tracker.db` ändras inte.
 
+Om en äldre version av `update` avslutas direkt utan utskrift i Proxmox-konsolen, kör
+uppdateringen från Proxmox-hosten i stället:
+
+```bash
+pct exec <CTID> -- /usr/local/bin/update
+```
+
 För en container som skapades innan uppdateringskommandot fanns, kör en gång som `root`
 inne i containern:
 
