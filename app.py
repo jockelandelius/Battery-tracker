@@ -23,10 +23,10 @@ def get_app_version(base_dir=BASE_DIR):
     if release_path.is_file():
         release = release_path.read_text(encoding="utf-8").strip()
         if re.fullmatch(r"[0-9a-fA-F]{7,64}", release):
-            return release[:12]
+            return release[:7]
     try:
         result = subprocess.run(
-            ["git", "-C", str(base_dir), "rev-parse", "--short=12", "HEAD"],
+            ["git", "-C", str(base_dir), "rev-parse", "--short=7", "HEAD"],
             capture_output=True, check=True, text=True, timeout=1,
         )
         return result.stdout.strip()
