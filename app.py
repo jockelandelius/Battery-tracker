@@ -490,8 +490,9 @@ def create_app():
     def charge_new():
         database = get_db()
         batteries = database.execute(
-            "SELECT batteries.id, batteries.identifier, battery_types.code FROM batteries JOIN battery_types ON battery_types.id = batteries.type_id ORDER BY batteries.identifier"
+            "SELECT batteries.id, batteries.identifier, batteries.brand, battery_types.code FROM batteries JOIN battery_types ON battery_types.id = batteries.type_id ORDER BY batteries.identifier"
         ).fetchall()
+        batteries = [dict(battery) for battery in batteries]
         selected_battery_id = request.values.get("battery_id", type=int)
         if request.method == "POST":
             battery_id = request.form.get("battery_id", type=int)
