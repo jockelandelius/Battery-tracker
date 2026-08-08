@@ -21,6 +21,16 @@ REPOSITORY_BRANCH="${REPOSITORY_BRANCH:-main}"
 command -v git >/dev/null 2>&1 || { echo "Git saknas. Kör om installationsskriptet." >&2; exit 1; }
 [[ -d "$APP_DIR" ]] || { echo "Hittar inte $APP_DIR." >&2; exit 1; }
 
+GETTY_OVERRIDE=/etc/systemd/system/container-getty@1.service.d/override.conf
+install -d -m 0755 "$(dirname "$GETTY_OVERRIDE")"
+cat > "$GETTY_OVERRIDE" <<'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 $TERM
+EOF
+systemctl daemon-reload
+systemctl restart container-getty@1.service
+
 SOURCE_DIR="$(mktemp -d)"
 cleanup() {
   rm -rf "$SOURCE_DIR"
@@ -33,7 +43,7 @@ NEW_VERSION="$(git -C "$SOURCE_DIR" rev-parse HEAD)"
 CURRENT_VERSION="$(cat "$APP_DIR/.release" 2>/dev/null || true)"
 
 if [[ "$NEW_VERSION" == "$CURRENT_VERSION" ]]; then
-  echo "Batteribanken är redan uppdaterad ($(git -C "$SOURCE_DIR" rev-parse --short HEAD))."
+  echo "Batteribanken är redan uppdaterad ($(git -C "$SOURCE_DIR" rev-parse --short HEAD)); konsolens automatiska inloggning är konfigurerad."
   exit 0
 fi
 

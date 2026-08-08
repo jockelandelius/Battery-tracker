@@ -62,7 +62,16 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
+GETTY_OVERRIDE=/etc/systemd/system/container-getty@1.service.d/override.conf
+install -d -m 0755 "$(dirname "$GETTY_OVERRIDE")"
+cat > "$GETTY_OVERRIDE" <<'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 $TERM
+EOF
+
 chown -R "$SERVICE_USER:$SERVICE_USER" "$APP_DIR" "$DATA_DIR"
 systemctl daemon-reload
+systemctl restart container-getty@1.service
 systemctl enable --now battery-tracker
 echo "Klart. Batteribanken lyssnar på port 8000."

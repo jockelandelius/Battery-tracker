@@ -72,6 +72,17 @@ Skriptet kräver en amd64-baserad Proxmox VE-host med internetåtkomst. Appens d
 i containern under `/var/lib/battery-tracker`; säkerhetskopiera den filen regelbundet.
 Sätt gärna en reverse proxy framför tjänsten för HTTPS. Det tidigare
 `deploy/lxc-install.sh` finns kvar för manuell installation i en befintlig LXC.
+Precis som Community Scripts använder containern automatisk root-inloggning i Proxmox-konsolen;
+det aktiverar inte SSH-inloggning.
+
+Skriptet aktiverar även `nesting=1,keyctl=1`, vilket är Community Scripts-standard för
+oprivilegierade LXC:er och förhindrar systemd-varningen i Debian 12. För en redan skapad
+container kör du följande på Proxmox-hosten och startar sedan om containern:
+
+```bash
+pct set <CTID> --features nesting=1,keyctl=1
+pct restart <CTID>
+```
 
 ## Uppdatera LXC-installationen
 
@@ -95,3 +106,7 @@ rm -rf /tmp/battery-tracker-source
 ```
 
 Därefter finns kommandot `update` tillgängligt.
+
+För en redan skapad container: kör `update` två gånger efter att denna version har släppts.
+Första körningen hämtar det nya uppdateringsskriptet och den andra aktiverar den automatiska
+inloggningen i konsolen.

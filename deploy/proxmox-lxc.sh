@@ -153,6 +153,7 @@ pct create "$CTID" "$TEMPLATE_STORAGE:vztmpl/$TEMPLATE" \
   --swap 512 \
   --rootfs "$STORAGE:$DISK_SIZE" \
   --net0 "name=eth0,bridge=$BRIDGE,ip=dhcp" \
+  --features nesting=1,keyctl=1 \
   --unprivileged 1 \
   --onboot 1 \
   --start 0
