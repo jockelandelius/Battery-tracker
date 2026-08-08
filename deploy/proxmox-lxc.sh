@@ -38,12 +38,31 @@ is_positive_integer() {
   [[ "$1" =~ ^[1-9][0-9]*$ ]]
 }
 
-default_storage() {
-  pvesm status -content rootdir 2>/dev/null | awk 'NR > 1 && $3 == "active" { print $1; exit }'
+rootfs_storages() {
+  pvesm status -content rootdir 2>/dev/null | awk 'NR > 1 && $3 == "active" { print $1 }'
 }
 
 default_template_storage() {
   pvesm status -content vztmpl 2>/dev/null | awk 'NR > 1 && $3 == "active" { print $1; exit }'
+}
+
+choose_rootfs_storage() {
+  storage_count=$(rootfs_storages | wc -l)
+  (( storage_count > 0 )) || die "Hittar ingen aktiv lagring för LXC-diskar."
+  blue "Välj lagring för LXC-disken:"
+  storage_number=1
+  while IFS= read -r storage_name; do
+    printf '  %s) %s\n' "$storage_number" "$storage_name"
+    ((storage_number += 1))
+  done < <(rootfs_storages)
+  while true; do
+    read -r -p "Lagring (ange nummer): " selected_storage || die "Ett lagringsval krävs."
+    if [[ "$selected_storage" =~ ^[1-9][0-9]*$ ]] && (( selected_storage <= storage_count )); then
+      STORAGE=$(rootfs_storages | sed -n "$selected_storage"p)
+      return
+    fi
+    red "Ange ett av numren i listan."
+  done
 }
 
 storage_exists() {
@@ -64,30 +83,43 @@ CORES=1
 MEMORY=512
 DISK_SIZE=4
 BRIDGE="vmbr0"
-STORAGE="$(default_storage)"
+STORAGE=""
 TEMPLATE_STORAGE="$(default_template_storage)"
 
-[[ -n "$STORAGE" ]] || die "Hittar ingen aktiv lagring för LXC-diskar."
 [[ -n "$TEMPLATE_STORAGE" ]] || die "Hittar ingen aktiv lagring för LXC-mallar."
+
+if (( ! ADVANCED_MODE )); then
+  [[ -t 0 ]] || die "Interaktiv terminal krävs för att välja LXC-lagring."
+  blue "Välj installationsläge:"
+  printf '  1) Standard (1 CPU, 512 MiB RAM, 4 GiB disk, DHCP)\n'
+  printf '  2) Avancerat (ändra resurser, nätverk och mallagring)\n'
+  read -r -p "Läge [1/2, standard=1]: " installation_mode
+  [[ -n "$installation_mode" ]] || installation_mode=1
+  case "$installation_mode" in
+    1) ;;
+    2) ADVANCED_MODE=1 ;;
+    *) die "Välj 1 för standard eller 2 för avancerat läge." ;;
+  esac
+fi
 
 if (( ADVANCED_MODE )); then
   blue "Avancerad konfiguration (tryck Enter för standardvärde)"
-  read -r -p "Container-ID [$CTID]: " input && CTID="${input:-$CTID}"
-  read -r -p "Värdnamn [$HOSTNAME]: " input && HOSTNAME="${input:-$HOSTNAME}"
-  read -r -p "CPU-kärnor [$CORES]: " input && CORES="${input:-$CORES}"
-  read -r -p "Minne i MiB [$MEMORY]: " input && MEMORY="${input:-$MEMORY}"
-  read -r -p "Disk i GiB [$DISK_SIZE]: " input && DISK_SIZE="${input:-$DISK_SIZE}"
-  read -r -p "Nätverksbrygga [$BRIDGE]: " input && BRIDGE="${input:-$BRIDGE}"
-  read -r -p "Lagring för LXC-disk [$STORAGE]: " input && STORAGE="${input:-$STORAGE}"
-  read -r -p "Lagring för mall [$TEMPLATE_STORAGE]: " input && TEMPLATE_STORAGE="${input:-$TEMPLATE_STORAGE}"
+  input=""; read -r -p "Container-ID [$CTID]: " input || true; [[ -n "$input" ]] && CTID="$input"
+  input=""; read -r -p "Värdnamn [$HOSTNAME]: " input || true; [[ -n "$input" ]] && HOSTNAME="$input"
+  input=""; read -r -p "CPU-kärnor [$CORES]: " input || true; [[ -n "$input" ]] && CORES="$input"
+  input=""; read -r -p "Minne i MiB [$MEMORY]: " input || true; [[ -n "$input" ]] && MEMORY="$input"
+  input=""; read -r -p "Disk i GiB [$DISK_SIZE]: " input || true; [[ -n "$input" ]] && DISK_SIZE="$input"
+  input=""; read -r -p "Nätverksbrygga [$BRIDGE]: " input || true; [[ -n "$input" ]] && BRIDGE="$input"
+  input=""; read -r -p "Lagring för mall [$TEMPLATE_STORAGE]: " input || true; [[ -n "$input" ]] && TEMPLATE_STORAGE="$input"
 fi
+
+choose_rootfs_storage
 
 is_positive_integer "$CTID" || die "Container-ID måste vara ett positivt heltal."
 is_positive_integer "$CORES" || die "Antal CPU-kärnor måste vara ett positivt heltal."
 is_positive_integer "$MEMORY" || die "Minne måste vara ett positivt heltal."
 is_positive_integer "$DISK_SIZE" || die "Diskstorlek måste vara ett positivt heltal."
 [[ "$HOSTNAME" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "Värdnamnet är ogiltigt."
-storage_exists "$STORAGE" || die "Lagringen '$STORAGE' finns inte."
 storage_exists "$TEMPLATE_STORAGE" || die "Mallagringen '$TEMPLATE_STORAGE' finns inte."
 ip link show "$BRIDGE" >/dev/null 2>&1 || die "Nätverksbryggan '$BRIDGE' finns inte."
 if pct status "$CTID" >/dev/null 2>&1; then

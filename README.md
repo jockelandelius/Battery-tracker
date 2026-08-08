@@ -47,15 +47,17 @@ exempelvis introduktionsmånad; den importeras då som tom.
 ## Installera i Proxmox LXC
 
 Kör ett kommando som `root` i Proxmox VE-hostens shell. Det skapar en oprivilegierad
-Debian 12-LXC (1 CPU, 512 MiB RAM, 4 GiB disk, DHCP på `vmbr0`), installerar appen och
-startar den som en systemd-tjänst:
+Debian 12-LXC och installerar appen som en systemd-tjänst. Skriptet frågar alltid efter
+vilken aktiv Proxmox-lagring som ska användas för LXC-disken. Du väljer även standardläge
+(1 CPU, 512 MiB RAM, 4 GiB disk och DHCP på `vmbr0`) eller avancerat läge:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/jockelandelius/Battery-tracker/main/deploy/proxmox-lxc.sh)"
 ```
 
-För att välja container-ID, resurser, lagring eller brygga själv, hämta skriptet och
-kör det med `--advanced`:
+För att gå direkt till de avancerade parametrarna för container-ID, resurser, brygga och
+mallagring, hämta skriptet och kör det med `--advanced`. LXC-lagring väljs fortfarande
+aktivt:
 
 ```bash
 bash proxmox-lxc.sh --advanced
